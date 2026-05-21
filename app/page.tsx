@@ -1,65 +1,581 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useState, useEffect } from "react";
+import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+
+const API_BASE_URL = "http://13.250.200.60:8000";
+
+export default function SmartLibApp() {
+  // --- App State ---
+  const [token, setToken] = useState<string | null>(null);
+  const [view, setView] = useState<"login" | "signup" | "borrower" | "librarian">("login");
+  
+  // --- User State ---
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // --- Auth Handlers ---
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setAuthError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Login failed");
+      
+      setToken(data.access_token);
+      // Simple role routing based on email for the prototype
+      if (email.includes("admin") || email.includes("library")) setView("librarian");
+      else setView("borrower");
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setAuthError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Signup failed");
+      
+      setToken(data.access_token);
+      if (email.includes("admin") || email.includes("library")) setView("librarian");
+      else setView("borrower");
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = () => {
+    setToken(null);
+    setView("login");
+    setEmail("");
+    setPassword("");
+  };
+
+  // --- Main Render ---
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 print:bg-white">
+      {/* Navigation Bar */}
+      {token && (
+        <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 print:hidden">
+          <div className="flex items-center gap-2 text-indigo-600">
+            <BookOpen size={24} />
+            <span className="text-xl font-bold tracking-tight">SmartLib QR</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-slate-500 font-medium">
+              {view === "librarian" ? "Librarian Mode" : "Borrower Mode"}
+            </span>
+            <button onClick={logout} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
+              <LogOut size={20} />
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {/* View Router */}
+      <main className="p-6 print:p-0">
+        {view === "login" && (
+          <AuthView 
+            type="login" 
+            email={email} setEmail={setEmail} 
+            password={password} setPassword={setPassword} 
+            onSubmit={handleLogin} error={authError} switchView={() => setView("signup")} loading={loading} 
+          />
+        )}
+        {view === "signup" && (
+          <AuthView 
+            type="signup" 
+            email={email} setEmail={setEmail} 
+            password={password} setPassword={setPassword} 
+            name={name} setName={setName}
+            onSubmit={handleSignup} error={authError} switchView={() => setView("login")} loading={loading}
+          />
+        )}
+        {view === "borrower" && token && <BorrowerDashboard token={token} />}
+        {view === "librarian" && token && <LibrarianDashboard token={token} />}
       </main>
+
+      {/* Global Floating AI Chat */}
+      {token && <AIChatWidget />}
+    </div>
+  );
+}
+
+// ==========================================
+// SUB-COMPONENTS
+// ==========================================
+
+function AuthView({ type, email, setEmail, password, setPassword, name, setName, onSubmit, error, switchView, loading }: any) {
+  return (
+    <div className="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+      <div className="flex justify-center mb-6 text-indigo-600">
+        <Library size={48} strokeWidth={1.5} />
+      </div>
+      <h2 className="text-2xl font-bold text-center mb-2">{type === "login" ? "Welcome Back" : "Create Account"}</h2>
+      <p className="text-slate-500 text-center mb-8">{type === "login" ? "Sign in to access your library." : "Join SmartLib today."}</p>
+      
+      <form onSubmit={onSubmit} className="space-y-4">
+        {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
+        
+        {type === "signup" && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="John Doe" />
+          </div>
+        )}
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="you@example.com" />
+          {type === "login" && <p className="text-xs text-slate-400 mt-1">Hint: Use 'admin@...' for Librarian dashboard</p>}
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="••••••••" />
+        </div>
+
+        <button disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl transition-colors flex justify-center items-center gap-2 disabled:opacity-70">
+          {loading ? <Loader2 size={18} className="animate-spin" /> : type === "login" ? "Sign In" : "Sign Up"}
+        </button>
+      </form>
+      
+      <p className="text-center mt-6 text-sm text-slate-500">
+        {type === "login" ? "Don't have an account? " : "Already have an account? "}
+        <button onClick={switchView} className="text-indigo-600 font-medium hover:underline">
+          {type === "login" ? "Sign up" : "Log in"}
+        </button>
+      </p>
+    </div>
+  );
+}
+
+function BorrowerDashboard({ token }: { token: string }) {
+  const [scanInput, setScanInput] = useState("");
+  const [message, setMessage] = useState({ text: "", type: "" });
+  const [loading, setLoading] = useState(false);
+
+  const handleTransaction = async (endpoint: string) => {
+    if (!scanInput) return;
+    setLoading(true);
+    setMessage({ text: "", type: "" });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ qr_code_id: scanInput }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Transaction failed");
+      setMessage({ text: `Successfully ${endpoint}ed book!`, type: "success" });
+      setScanInput("");
+    } catch (err: any) {
+      setMessage({ text: err.message, type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Your Dashboard</h1>
+      
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Scanner Card (Mock) */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+          <div className="w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 mb-6">
+            <ScanLine size={32} className="mb-2" />
+            <span className="text-xs font-medium">Camera Feed</span>
+          </div>
+          
+          <h3 className="text-lg font-bold mb-2">Scan a Book</h3>
+          <p className="text-sm text-slate-500 mb-6">Scan a QR code to borrow or return a book instantly.</p>
+          
+          <div className="w-full space-y-3">
+            <input 
+              type="text" 
+              value={scanInput} 
+              onChange={e => setScanInput(e.target.value)} 
+              placeholder="Or enter QR ID manually (e.g., QR-123)" 
+              className="w-full px-4 py-2 text-center rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500"
+            />
+            {message.text && (
+              <div className={`p-2 text-sm rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                {message.text}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button disabled={loading} onClick={() => handleTransaction('borrow')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-xl transition-colors">Borrow</button>
+              <button disabled={loading} onClick={() => handleTransaction('return')} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-medium py-2 rounded-xl transition-colors">Return</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Currently Reading (Mock UI for now) */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><BookOpen size={20} className="text-indigo-600" /> Currently Reading</h3>
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
+              <div className="w-12 h-16 bg-slate-200 rounded shadow-sm flex-shrink-0"></div>
+              <div>
+                <h4 className="font-bold text-slate-800">Dune</h4>
+                <p className="text-sm text-slate-500">Frank Herbert</p>
+                <div className="mt-3 bg-slate-200 h-2 w-full rounded-full overflow-hidden">
+                  <div className="bg-indigo-500 h-full w-1/3 rounded-full"></div>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Page 150 of 412 • 5 days left</p>
+              </div>
+            </div>
+            {/* Empty State */}
+            <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400">
+              <p className="text-sm">Ready for a new adventure?</p>
+              <p className="text-xs mt-1">Ask the AI for a recommendation!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LibrarianDashboard({ token }: { token: string }) {
+  const [tab, setTab] = useState('inventory'); // 'inventory', 'qr', 'scan'
+  const [books, setBooks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // New Book Form State
+  const [newBook, setNewBook] = useState({ qr_code_id: "", title: "", author: "", genre: "", description: "" });
+  const [formMsg, setFormMsg] = useState({ text: "", type: "" });
+
+  // QR Generator State
+  const [qrCount, setQrCount] = useState(12);
+  const [qrBatch, setQrBatch] = useState<string[]>([]);
+
+  const fetchBooks = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/books`);
+      const data = await res.json();
+      setBooks(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchBooks(); }, []);
+
+  const handleAddBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormMsg({ text: "", type: "" });
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newBook),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to add book");
+      setFormMsg({ text: "Book added successfully!", type: "success" });
+      setNewBook({ qr_code_id: "", title: "", author: "", genre: "", description: "" });
+      fetchBooks(); // Refresh list
+    } catch (err: any) {
+      setFormMsg({ text: err.message, type: "error" });
+    }
+  };
+
+  const generateQRBatch = () => {
+    // Generates an array of secure, random 6-character strings like "QR-A1B2C3"
+    const newBatch = Array.from({ length: qrCount }, () => {
+      const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+      return `QR-${randomString}`;
+    });
+    setQrBatch(newBatch);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex justify-between items-end print:hidden">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Librarian Portal</h1>
+          <p className="text-slate-500">Manage inventory and QR codes.</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 space-x-6 print:hidden">
+        <button 
+          onClick={() => setTab('inventory')}
+          className={`pb-3 font-medium text-sm transition-colors ${tab === 'inventory' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
+        >
+          <Library className="w-4 h-4 inline mr-2"/>
+          Inventory
+        </button>
+        <button 
+          onClick={() => setTab('qr')}
+          className={`pb-3 font-medium text-sm transition-colors ${tab === 'qr' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
+        >
+          <Printer className="w-4 h-4 inline mr-2"/>
+          Generate QRs
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 min-h-[50vh] print:border-none print:shadow-none print:p-0">
+        
+        {/* --- INVENTORY TAB --- */}
+        {tab === 'inventory' && (
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Add Book Form */}
+            <div className="md:col-span-1 bg-slate-50 p-6 rounded-2xl border border-slate-100 h-fit">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus size={20} className="text-indigo-600"/> Scan-to-Add Book</h3>
+              <form onSubmit={handleAddBook} className="space-y-4">
+                {formMsg.text && (
+                  <div className={`p-2 text-sm rounded-lg ${formMsg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                    {formMsg.text}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Scanned QR ID</label>
+                  <input required value={newBook.qr_code_id} onChange={e => setNewBook({...newBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" placeholder="e.g. QR-101" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
+                  <input value={newBook.title} onChange={e => setNewBook({...newBook, title: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Author</label>
+                    <input value={newBook.author} onChange={e => setNewBook({...newBook, author: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Genre</label>
+                    <input value={newBook.genre} onChange={e => setNewBook({...newBook, genre: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Synopsis</label>
+                  <textarea value={newBook.description} onChange={e => setNewBook({...newBook, description: e.target.value})} rows={3} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 resize-none" />
+                </div>
+                <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 rounded-xl transition-colors">Add to Database</button>
+              </form>
+            </div>
+
+            {/* Inventory List */}
+            <div className="md:col-span-2 rounded-2xl border border-slate-100 overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                <h3 className="text-lg font-bold flex items-center gap-2"><Library size={20} className="text-indigo-600"/> Library Inventory</h3>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="text" placeholder="Search books..." className="pl-9 pr-4 py-2 text-sm rounded-full bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto bg-white">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500">
+                      <th className="p-4 font-medium border-b border-slate-100">QR ID</th>
+                      <th className="p-4 font-medium border-b border-slate-100">Title</th>
+                      <th className="p-4 font-medium border-b border-slate-100">Author</th>
+                      <th className="p-4 font-medium border-b border-slate-100">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={4} className="p-8 text-center text-slate-400"><Loader2 className="animate-spin mx-auto" /></td></tr>
+                    ) : books.length === 0 ? (
+                      <tr><td colSpan={4} className="p-8 text-center text-slate-400">No books found. Scan a QR to add one!</td></tr>
+                    ) : (
+                      books.map((book) => (
+                        <tr key={book.id} className="hover:bg-slate-50/50 border-b border-slate-100 last:border-0 transition-colors">
+                          <td className="p-4 font-mono text-xs text-slate-500">{book.qr_code_id}</td>
+                          <td className="p-4 font-medium text-slate-800">{book.title || "Untitled"}</td>
+                          <td className="p-4 text-slate-600">{book.author || "Unknown"}</td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${book.is_available ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {book.is_available ? 'Available' : 'Checked Out'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- QR GENERATOR TAB --- */}
+        {tab === 'qr' && (
+          <div className="py-2 print:py-0">
+            {/* Generator Controls - Hidden during printing */}
+            <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end bg-slate-50 p-6 rounded-2xl border border-slate-100 print:hidden">
+              <div className="mb-4 sm:mb-0 max-w-md">
+                <h3 className="font-bold text-slate-800 mb-1 text-lg">Batch Generator</h3>
+                <p className="text-sm text-slate-500">Generate unique QR codes, print them on sticker paper, and attach them to physical books to register them later.</p>
+              </div>
+              <div className="flex gap-3 w-full sm:w-auto">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Quantity</label>
+                  <input type="number" min="1" max="100" value={qrCount} onChange={e => setQrCount(Number(e.target.value))} className="w-20 px-3 py-2 text-sm rounded-xl border border-slate-200 text-center" />
+                </div>
+                <div className="flex items-end">
+                  <button onClick={generateQRBatch} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-medium hover:bg-slate-800 transition">
+                    Generate
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Empty State */}
+            {qrBatch.length === 0 && (
+              <div className="text-center py-12 text-slate-400 print:hidden">
+                <Printer size={48} className="mx-auto mb-4 opacity-20" />
+                <p>Select a quantity and generate your QR codes.</p>
+              </div>
+            )}
+
+            {/* Generated Grid - Visible on screen AND in print layout */}
+            {qrBatch.length > 0 && (
+              <div>
+                <div className="flex justify-between items-center mb-4 print:hidden">
+                  <h3 className="font-bold text-slate-800">Generated Batch ({qrBatch.length})</h3>
+                  <button onClick={() => window.print()} className="bg-indigo-600 text-white px-5 py-2 rounded-xl font-medium hover:bg-indigo-700 transition flex items-center shadow-sm">
+                    <Download className="w-4 h-4 mr-2" /> Print Stickers
+                  </button>
+                </div>
+
+                {/* The Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 print:grid-cols-4 gap-4 print:gap-8 max-h-[60vh] print:max-h-none overflow-y-auto print:overflow-visible p-2 print:p-0">
+                  {qrBatch.map(id => (
+                    <div key={id} className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 print:border-dashed print:border-gray-400 rounded-xl print:rounded-none break-inside-avoid shadow-sm print:shadow-none">
+                      <QRCodeSVG value={id} size={100} level="M" />
+                      <span className="text-sm font-mono mt-3 font-bold text-slate-800">{id}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">SmartLib</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+function AIChatWidget() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<{role: 'user'|'ai', text: string}[]>([{ role: 'ai', text: 'Hi! Ask me for a book recommendation based on our available inventory.' }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    
+    const userText = input.trim();
+    setMessages(prev => [...prev, { role: 'user', text: userText }]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userText })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error("API Error");
+      
+      setMessages(prev => [...prev, { role: 'ai', text: data.reply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'ai', text: "Sorry, I'm having trouble connecting to the library brain right now." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="print:hidden">
+      {/* Chat Toggle Button */}
+      <button 
+        onClick={() => setIsOpen(true)}
+        className={`fixed bottom-6 right-6 p-4 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:scale-105 transition-all z-40 ${isOpen ? 'opacity-0 pointer-events-none scale-90' : 'opacity-100'}`}
+      >
+        <MessageSquare size={24} />
+      </button>
+
+      {/* Chat Panel */}
+      <div className={`fixed bottom-6 right-6 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col transition-all duration-300 origin-bottom-right z-50 ${isOpen ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`} style={{ height: '500px', maxHeight: '80vh' }}>
+        
+        {/* Header */}
+        <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
+          <div className="flex items-center gap-2">
+            <Library size={20} />
+            <h3 className="font-bold">SmartLib AI</h3>
+          </div>
+          <button onClick={() => setIsOpen(false)} className="text-indigo-200 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm'}`}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-4 py-3 flex gap-1.5 shadow-sm">
+                <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100">
+          <input 
+            type="text" 
+            value={input} 
+            onChange={e => setInput(e.target.value)} 
+            placeholder="Ask for recommendations..." 
+            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+          />
+        </form>
+      </div>
     </div>
   );
 }
