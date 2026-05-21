@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer } from "lucide-react";
+import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer, Camera } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 const API_BASE_URL = "http://13.250.200.60:8000";
 
@@ -176,6 +177,29 @@ function BorrowerDashboard({ token }: { token: string }) {
   const [scanInput, setScanInput] = useState("");
   const [message, setMessage] = useState({ text: "", type: "" });
   const [loading, setLoading] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+
+  const [borrowedBooks, setBorrowedBooks] = useState<any[]>([]);
+  const [loadingBooks, setLoadingBooks] = useState(true);
+
+  const fetchBorrowedBooks = async () => {
+    setLoadingBooks(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/transactions/me`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) setBorrowedBooks(data);
+    } catch (err) {
+      console.error("Failed to fetch borrowed books", err);
+    } finally {
+      setLoadingBooks(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBorrowedBooks();
+  }, []);
 
   const handleTransaction = async (endpoint: string) => {
     if (!scanInput) return;
@@ -191,6 +215,7 @@ function BorrowerDashboard({ token }: { token: string }) {
       if (!response.ok) throw new Error(data.detail || "Transaction failed");
       setMessage({ text: `Successfully ${endpoint}ed book!`, type: "success" });
       setScanInput("");
+      fetchBorrowedBooks(); // Refresh the active books list immediately!
     } catch (err: any) {
       setMessage({ text: err.message, type: "error" });
     } finally {
@@ -203,12 +228,36 @@ function BorrowerDashboard({ token }: { token: string }) {
       <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Your Dashboard</h1>
       
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Scanner Card (Mock) */}
+        {/* Scanner Card */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-          <div className="w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 mb-6">
-            <ScanLine size={32} className="mb-2" />
-            <span className="text-xs font-medium">Camera Feed</span>
-          </div>
+          
+          {showScanner ? (
+            <div className="w-full max-w-sm mb-6 rounded-2xl overflow-hidden border-2 border-indigo-500 relative">
+              <Scanner 
+                onScan={(result) => {
+                  if (result && result.length > 0) {
+                    setScanInput(result[0].rawValue);
+                    setShowScanner(false);
+                    setMessage({ text: "QR Scanned Successfully!", type: "success" });
+                  }
+                }} 
+              />
+              <button 
+                onClick={() => setShowScanner(false)} 
+                className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={() => setShowScanner(true)}
+              className="w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-2xl flex flex-col items-center justify-center text-slate-400 mb-6 transition-colors group cursor-pointer"
+            >
+              <Camera size={32} className="mb-2 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-medium">Open Camera</span>
+            </button>
+          )}
           
           <h3 className="text-lg font-bold mb-2">Scan a Book</h3>
           <p className="text-sm text-slate-500 mb-6">Scan a QR code to borrow or return a book instantly.</p>
@@ -227,32 +276,48 @@ function BorrowerDashboard({ token }: { token: string }) {
               </div>
             )}
             <div className="flex gap-2">
-              <button disabled={loading} onClick={() => handleTransaction('borrow')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-xl transition-colors">Borrow</button>
-              <button disabled={loading} onClick={() => handleTransaction('return')} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-medium py-2 rounded-xl transition-colors">Return</button>
+              <button disabled={loading || !scanInput} onClick={() => handleTransaction('borrow')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 rounded-xl transition-colors">Borrow</button>
+              <button disabled={loading || !scanInput} onClick={() => handleTransaction('return')} className="flex-1 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-medium py-2 rounded-xl transition-colors">Return</button>
             </div>
           </div>
         </div>
 
-        {/* Currently Reading (Mock UI for now) */}
+        {/* Currently Reading Dashboard */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><BookOpen size={20} className="text-indigo-600" /> Currently Reading</h3>
           <div className="space-y-4">
-            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
-              <div className="w-12 h-16 bg-slate-200 rounded shadow-sm flex-shrink-0"></div>
-              <div>
-                <h4 className="font-bold text-slate-800">Dune</h4>
-                <p className="text-sm text-slate-500">Frank Herbert</p>
-                <div className="mt-3 bg-slate-200 h-2 w-full rounded-full overflow-hidden">
-                  <div className="bg-indigo-500 h-full w-1/3 rounded-full"></div>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">Page 150 of 412 • 5 days left</p>
+            {loadingBooks ? (
+              <div className="p-8 text-center text-slate-400"><Loader2 className="animate-spin mx-auto" /></div>
+            ) : borrowedBooks.length === 0 ? (
+              <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400">
+                <p className="text-sm">Ready for a new adventure?</p>
+                <p className="text-xs mt-1">Ask the AI for a recommendation, then scan a book to borrow it!</p>
               </div>
-            </div>
-            {/* Empty State */}
-            <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400">
-              <p className="text-sm">Ready for a new adventure?</p>
-              <p className="text-xs mt-1">Ask the AI for a recommendation!</p>
-            </div>
+            ) : (
+              borrowedBooks.map((bBook: any) => (
+                <div key={bBook.transaction_id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
+                  <div className="w-12 h-16 bg-indigo-100 rounded shadow-sm flex-shrink-0 flex items-center justify-center text-indigo-400">
+                    <BookOpen size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-slate-800">{bBook.book_title || "Unknown Title"}</h4>
+                    <p className="text-sm text-slate-500">{bBook.book_author || "Unknown Author"}</p>
+                    <div className="mt-3 bg-slate-200 h-2 w-full rounded-full overflow-hidden">
+                      <div 
+                        className="bg-indigo-500 h-full rounded-full" 
+                        style={{ width: `${bBook.book_total_pages > 0 ? (bBook.current_page / bBook.book_total_pages) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Page {bBook.current_page} of {bBook.book_total_pages || '?'} • 
+                      <span className={bBook.days_left <= 3 ? "text-red-500 font-bold ml-1" : "ml-1"}>
+                        {bBook.days_left} days left
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -268,6 +333,7 @@ function LibrarianDashboard({ token }: { token: string }) {
   // New Book Form State
   const [newBook, setNewBook] = useState({ qr_code_id: "", title: "", author: "", genre: "", description: "" });
   const [formMsg, setFormMsg] = useState({ text: "", type: "" });
+  const [showScanner, setShowScanner] = useState(false);
 
   // QR Generator State
   const [qrCount, setQrCount] = useState(12);
@@ -349,8 +415,28 @@ function LibrarianDashboard({ token }: { token: string }) {
         {tab === 'inventory' && (
           <div className="grid md:grid-cols-3 gap-6">
             {/* Add Book Form */}
-            <div className="md:col-span-1 bg-slate-50 p-6 rounded-2xl border border-slate-100 h-fit">
+            <div className="md:col-span-1 bg-slate-50 p-6 rounded-2xl border border-slate-100 h-fit relative">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus size={20} className="text-indigo-600"/> Scan-to-Add Book</h3>
+              
+              {showScanner && (
+                <div className="absolute inset-0 z-20 bg-white rounded-2xl border-2 border-indigo-500 overflow-hidden flex flex-col">
+                  <div className="bg-indigo-50 p-3 flex justify-between items-center border-b border-indigo-100">
+                    <span className="font-bold text-sm text-indigo-800">Scan Sticker</span>
+                    <button onClick={() => setShowScanner(false)} className="text-indigo-600 hover:text-indigo-900"><X size={20}/></button>
+                  </div>
+                  <div className="flex-1">
+                    <Scanner 
+                      onScan={(result) => {
+                        if (result && result.length > 0) {
+                          setNewBook({...newBook, qr_code_id: result[0].rawValue});
+                          setShowScanner(false);
+                        }
+                      }} 
+                    />
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleAddBook} className="space-y-4">
                 {formMsg.text && (
                   <div className={`p-2 text-sm rounded-lg ${formMsg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
@@ -359,7 +445,12 @@ function LibrarianDashboard({ token }: { token: string }) {
                 )}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Scanned QR ID</label>
-                  <input required value={newBook.qr_code_id} onChange={e => setNewBook({...newBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" placeholder="e.g. QR-101" />
+                  <div className="flex gap-2">
+                    <input required value={newBook.qr_code_id} onChange={e => setNewBook({...newBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" placeholder="e.g. QR-101" />
+                    <button type="button" onClick={() => setShowScanner(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-lg hover:bg-indigo-200 transition-colors">
+                      <Camera size={18} />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
