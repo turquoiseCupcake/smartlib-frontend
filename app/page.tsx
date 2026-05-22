@@ -5,7 +5,7 @@ import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User,
 import { QRCodeSVG } from "qrcode.react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
-const API_BASE_URL = "http://13.250.200.60:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://13.250.200.60:8000";
 
 // --- Image Compression Helper ---
 // Resizes and compresses images before sending them to the backend to save storage!
