@@ -1,11 +1,55 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer, Camera, Edit, Sparkles } from "lucide-react";
+import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer, Camera, Edit, Sparkles, Trash2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
 const API_BASE_URL = "http://13.250.200.60:8000";
+
+// --- Image Compression Helper ---
+// Resizes and compresses images before sending them to the backend to save storage!
+const compressImage = (file: File): Promise<File> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // Good max width for book covers
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          } else {
+            resolve(file); // Fallback to original if compression fails
+          }
+        }, 'image/jpeg', 0.8); // 80% compression quality
+      };
+    };
+  });
+};
 
 export default function SmartLibApp() {
   // --- App State ---
@@ -130,45 +174,82 @@ export default function SmartLibApp() {
 
 function AuthView({ type, email, setEmail, password, setPassword, name, setName, onSubmit, error, switchView, loading }: any) {
   return (
-    <div className="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+    <div className="max-w-md mx-auto mt-10 md:mt-20 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
       <div className="flex justify-center mb-6 text-indigo-600">
         <Library size={48} strokeWidth={1.5} />
       </div>
       <h2 className="text-2xl font-bold text-center mb-2">{type === "login" ? "Welcome Back" : "Create Account"}</h2>
       <p className="text-slate-500 text-center mb-8">{type === "login" ? "Sign in to access your library." : "Join SmartLib today."}</p>
       
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-5">
         {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
         
         {type === "signup" && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="John Doe" />
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
+            <input 
+              type="text" 
+              required 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              autoComplete="name"
+              className="w-full px-4 py-3 min-h-[48px] rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-base" 
+              placeholder="John Doe" 
+            />
           </div>
         )}
         
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="you@example.com" />
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
+          <input 
+            type="email" 
+            required 
+            value={email} 
+            onChange={e => setEmail(e.target.value)} 
+            autoComplete="email"
+            className="w-full px-4 py-3 min-h-[48px] rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-base" 
+            placeholder="you@example.com" 
+          />
           {type === "login" && <p className="text-xs text-slate-400 mt-1">Hint: Use 'admin@...' for Librarian dashboard</p>}
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="••••••••" />
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+          <input 
+            type="password" 
+            required 
+            value={password} 
+            onChange={e => setPassword(e.target.value)} 
+            autoComplete={type === "login" ? "current-password" : "new-password"}
+            className="w-full px-4 py-3 min-h-[48px] rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-base" 
+            placeholder="••••••••" 
+          />
         </div>
 
-        <button disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl transition-colors flex justify-center items-center gap-2 disabled:opacity-70">
+        <button 
+          disabled={loading} 
+          type="submit" 
+          className="w-full min-h-[48px] bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl transition-colors flex justify-center items-center gap-2 disabled:opacity-70 text-base shadow-sm"
+        >
           {loading ? <Loader2 size={18} className="animate-spin" /> : type === "login" ? "Sign In" : "Sign Up"}
         </button>
       </form>
       
-      <p className="text-center mt-6 text-sm text-slate-500">
-        {type === "login" ? "Don't have an account? " : "Already have an account? "}
-        <button onClick={switchView} className="text-indigo-600 font-medium hover:underline">
+      <div className="text-center mt-6 flex flex-col items-center justify-center">
+        <span className="text-sm text-slate-500">
+          {type === "login" ? "Don't have an account?" : "Already have an account?"}
+        </span>
+        <button 
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            switchView();
+          }} 
+          className="text-indigo-600 font-medium hover:underline p-3 inline-block mt-1 min-h-[44px] min-w-[44px]"
+        >
           {type === "login" ? "Sign up" : "Log in"}
         </button>
-      </p>
+      </div>
     </div>
   );
 }
@@ -244,7 +325,7 @@ function BorrowerDashboard({ token }: { token: string }) {
               />
               <button 
                 onClick={() => setShowScanner(false)} 
-                className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70"
+                className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 min-w-[44px] min-h-[44px] flex items-center justify-center"
               >
                 <X size={16} />
               </button>
@@ -268,7 +349,7 @@ function BorrowerDashboard({ token }: { token: string }) {
               value={scanInput} 
               onChange={e => setScanInput(e.target.value)} 
               placeholder="Or enter QR ID manually (e.g., QR-123)" 
-              className="w-full px-4 py-2 text-center rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-3 min-h-[48px] text-center rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500"
             />
             {message.text && (
               <div className={`p-2 text-sm rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
@@ -276,8 +357,8 @@ function BorrowerDashboard({ token }: { token: string }) {
               </div>
             )}
             <div className="flex gap-2">
-              <button disabled={loading || !scanInput} onClick={() => handleTransaction('borrow')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 rounded-xl transition-colors">Borrow</button>
-              <button disabled={loading || !scanInput} onClick={() => handleTransaction('return')} className="flex-1 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-medium py-2 rounded-xl transition-colors">Return</button>
+              <button disabled={loading || !scanInput} onClick={() => handleTransaction('borrow')} className="flex-1 min-h-[48px] bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 rounded-xl transition-colors">Borrow</button>
+              <button disabled={loading || !scanInput} onClick={() => handleTransaction('return')} className="flex-1 min-h-[48px] bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-medium py-2 rounded-xl transition-colors">Return</button>
             </div>
           </div>
         </div>
@@ -431,15 +512,36 @@ function LibrarianDashboard({ token }: { token: string }) {
     }
   };
 
+  const handleDeleteBook = async (bookId: number) => {
+    if (!window.confirm("Are you sure you want to completely delete this book? This will also delete any uploaded cover image and its borrow history!")) return;
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/books/${bookId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to delete book");
+      }
+      fetchBooks(); // Refresh the list
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetState: 'new' | 'edit') => {
     const file = e.target.files?.[0];
     if (!file) return;
     
     setUploadingImage(true);
-    const formData = new FormData();
-    formData.append("file", file);
-
+    
     try {
+      // Compress the image before uploading to save storage!
+      const compressedFile = await compressImage(file);
+      const formData = new FormData();
+      formData.append("file", compressedFile);
+
       const res = await fetch(`${API_BASE_URL}/api/upload-cover`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
@@ -451,7 +553,7 @@ function LibrarianDashboard({ token }: { token: string }) {
       if (targetState === 'new') setNewBook({...newBook, cover_image_url: data.cover_image_url});
       else setEditingBook({...editingBook, cover_image_url: data.cover_image_url});
       
-      setFormMsg({ text: "Image uploaded securely!", type: "success" });
+      setFormMsg({ text: "Image compressed & uploaded securely!", type: "success" });
     } catch (err: any) {
       setFormMsg({ text: err.message, type: "error" });
     } finally {
@@ -477,17 +579,17 @@ function LibrarianDashboard({ token }: { token: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 space-x-6 print:hidden">
+      <div className="flex border-b border-slate-200 space-x-6 print:hidden overflow-x-auto whitespace-nowrap">
         <button 
           onClick={() => setTab('inventory')}
-          className={`pb-3 font-medium text-sm transition-colors ${tab === 'inventory' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
+          className={`pb-3 font-medium text-sm transition-colors min-h-[44px] ${tab === 'inventory' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
         >
           <Library className="w-4 h-4 inline mr-2"/>
           Inventory
         </button>
         <button 
           onClick={() => setTab('qr')}
-          className={`pb-3 font-medium text-sm transition-colors ${tab === 'qr' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
+          className={`pb-3 font-medium text-sm transition-colors min-h-[44px] ${tab === 'qr' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
         >
           <Printer className="w-4 h-4 inline mr-2"/>
           Generate QRs
@@ -495,11 +597,11 @@ function LibrarianDashboard({ token }: { token: string }) {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 min-h-[50vh] print:border-none print:shadow-none print:p-0">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-6 min-h-[50vh] print:border-none print:shadow-none print:p-0">
         
         {/* --- INVENTORY TAB --- */}
         {tab === 'inventory' && (
-          <div className="grid md:grid-cols-3 gap-6 relative">
+          <div className="grid lg:grid-cols-3 gap-6 relative">
             
             {/* Book Edit Modal Overlay */}
             {editingBook && (
@@ -507,10 +609,10 @@ function LibrarianDashboard({ token }: { token: string }) {
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
                   <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex justify-between items-center">
                     <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Edit size={18}/> Edit Book: {editingBook.title}</h3>
-                    <button onClick={() => { setEditingBook(null); setFormMsg({text:"", type:""}); }} className="text-indigo-400 hover:text-indigo-900"><X size={20}/></button>
+                    <button onClick={() => { setEditingBook(null); setFormMsg({text:"", type:""}); }} className="text-indigo-400 hover:text-indigo-900 min-w-[44px] min-h-[44px] flex justify-center items-center"><X size={20}/></button>
                   </div>
                   
-                  <div className="p-6 overflow-y-auto flex-1">
+                  <div className="p-4 md:p-6 overflow-y-auto flex-1">
                     <form onSubmit={handleUpdateBook} className="space-y-4">
                       {formMsg.text && (
                         <div className={`p-3 text-sm rounded-lg border ${formMsg.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
@@ -520,15 +622,15 @@ function LibrarianDashboard({ token }: { token: string }) {
                       
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">QR Code ID (Reassign)</label>
-                        <input required value={editingBook.qr_code_id} onChange={e => setEditingBook({...editingBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 font-mono" />
+                        <input required value={editingBook.qr_code_id} onChange={e => setEditingBook({...editingBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-300 font-mono" />
                         <p className="text-[10px] text-slate-500 mt-1">Change this to link the book to a newly printed QR sticker.</p>
                       </div>
 
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">Title</label>
                         <div className="flex gap-2">
-                          <input value={editingBook.title} onChange={e => setEditingBook({...editingBook, title: e.target.value})} className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300" />
-                          <button type="button" onClick={() => handleAutofill('edit', editingBook.title)} disabled={autofilling} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 text-sm font-medium border border-amber-200">
+                          <input value={editingBook.title} onChange={e => setEditingBook({...editingBook, title: e.target.value})} className="flex-1 px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-300" />
+                          <button type="button" onClick={() => handleAutofill('edit', editingBook.title)} disabled={autofilling} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 rounded-lg min-h-[44px] transition-colors flex items-center gap-1 disabled:opacity-50 text-sm font-medium border border-amber-200">
                             {autofilling ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} AI Fill
                           </button>
                         </div>
@@ -537,27 +639,43 @@ function LibrarianDashboard({ token }: { token: string }) {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-bold text-slate-700 mb-1">Author</label>
-                          <input value={editingBook.author || ''} onChange={e => setEditingBook({...editingBook, author: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                          <input value={editingBook.author || ''} onChange={e => setEditingBook({...editingBook, author: e.target.value})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-300" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-slate-700 mb-1">Genre</label>
-                          <input value={editingBook.genre || ''} onChange={e => setEditingBook({...editingBook, genre: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                          <input value={editingBook.genre || ''} onChange={e => setEditingBook({...editingBook, genre: e.target.value})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-300" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                          <div>
                           <label className="block text-xs font-bold text-slate-700 mb-1">Total Pages</label>
-                          <input type="number" value={editingBook.total_pages || ''} onChange={e => setEditingBook({...editingBook, total_pages: Number(e.target.value)})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                          <input type="number" value={editingBook.total_pages || ''} onChange={e => setEditingBook({...editingBook, total_pages: Number(e.target.value)})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-300" />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Cover Image (Upload New)</label>
-                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'edit')} disabled={uploadingImage} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                        {uploadingImage && <p className="text-xs text-indigo-500 mt-1 flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Uploading safely to VPS...</p>}
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Cover Image</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          {/* File Browser Upload */}
+                          <div className="flex-1 relative">
+                             <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'edit')} disabled={uploadingImage} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                             <div className="flex items-center justify-center gap-2 w-full bg-slate-100 text-slate-700 py-2.5 px-4 min-h-[44px] rounded-lg text-sm font-semibold border border-slate-200">
+                               <Plus size={16} /> Choose File
+                             </div>
+                          </div>
+                          
+                          {/* Camera Specific Upload */}
+                          <div className="flex-1 relative">
+                             <input type="file" accept="image/*" capture="environment" onChange={(e) => handleImageUpload(e, 'edit')} disabled={uploadingImage} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                             <div className="flex items-center justify-center gap-2 w-full bg-indigo-50 text-indigo-700 py-2.5 px-4 min-h-[44px] rounded-lg text-sm font-semibold border border-indigo-100">
+                               <Camera size={16} /> Take Photo
+                             </div>
+                          </div>
+                        </div>
+                        {uploadingImage && <p className="text-xs text-indigo-500 mt-2 flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Compressing & Uploading...</p>}
                         {editingBook.cover_image_url && (
-                          <div className="mt-2 border border-slate-200 rounded-lg p-1 w-fit bg-white">
+                          <div className="mt-3 border border-slate-200 rounded-lg p-1 w-fit bg-white shadow-sm">
                             <img src={`${API_BASE_URL}${editingBook.cover_image_url}`} alt="Cover Preview" className="h-24 object-cover rounded" />
                           </div>
                         )}
@@ -569,8 +687,8 @@ function LibrarianDashboard({ token }: { token: string }) {
                       </div>
 
                       <div className="pt-4 border-t border-slate-100 flex gap-2">
-                         <button type="button" onClick={() => { setEditingBook(null); setFormMsg({text:"", type:""}); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-xl transition-colors">Cancel</button>
-                         <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-xl transition-colors shadow-sm">Save Changes</button>
+                         <button type="button" onClick={() => { setEditingBook(null); setFormMsg({text:"", type:""}); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 min-h-[48px] rounded-xl transition-colors">Cancel</button>
+                         <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 min-h-[48px] rounded-xl transition-colors shadow-sm">Save Changes</button>
                       </div>
                     </form>
                   </div>
@@ -580,14 +698,14 @@ function LibrarianDashboard({ token }: { token: string }) {
 
 
             {/* Add Book Form (Sidebar) */}
-            <div className="md:col-span-1 bg-slate-50 p-6 rounded-2xl border border-slate-100 h-fit relative">
+            <div className="lg:col-span-1 bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-100 h-fit relative">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus size={20} className="text-indigo-600"/> Scan-to-Add Book</h3>
               
               {showScanner && (
                 <div className="absolute inset-0 z-20 bg-white rounded-2xl border-2 border-indigo-500 overflow-hidden flex flex-col">
                   <div className="bg-indigo-50 p-3 flex justify-between items-center border-b border-indigo-100">
                     <span className="font-bold text-sm text-indigo-800">Scan Sticker</span>
-                    <button onClick={() => setShowScanner(false)} className="text-indigo-600 hover:text-indigo-900"><X size={20}/></button>
+                    <button onClick={() => setShowScanner(false)} className="text-indigo-600 hover:text-indigo-900 min-w-[44px] min-h-[44px] flex items-center justify-center"><X size={20}/></button>
                   </div>
                   <div className="flex-1">
                     <Scanner 
@@ -604,15 +722,15 @@ function LibrarianDashboard({ token }: { token: string }) {
 
               <form onSubmit={handleAddBook} className="space-y-4">
                 {formMsg.text && !editingBook && (
-                  <div className={`p-2 text-sm rounded-lg ${formMsg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                  <div className={`p-3 text-sm rounded-lg ${formMsg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                     {formMsg.text}
                   </div>
                 )}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Scanned QR ID</label>
                   <div className="flex gap-2">
-                    <input required value={newBook.qr_code_id} onChange={e => setNewBook({...newBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" placeholder="e.g. QR-101" />
-                    <button type="button" onClick={() => setShowScanner(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-lg hover:bg-indigo-200 transition-colors">
+                    <input required value={newBook.qr_code_id} onChange={e => setNewBook({...newBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-200" placeholder="e.g. QR-101" />
+                    <button type="button" onClick={() => setShowScanner(true)} className="bg-indigo-100 text-indigo-700 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-indigo-200 transition-colors">
                       <Camera size={18} />
                     </button>
                   </div>
@@ -620,8 +738,8 @@ function LibrarianDashboard({ token }: { token: string }) {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
                   <div className="flex gap-2">
-                    <input value={newBook.title} onChange={e => setNewBook({...newBook, title: e.target.value})} className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200" />
-                    <button type="button" onClick={() => handleAutofill('new', newBook.title)} disabled={autofilling} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 text-xs font-bold border border-amber-200">
+                    <input value={newBook.title} onChange={e => setNewBook({...newBook, title: e.target.value})} className="flex-1 px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-200" />
+                    <button type="button" onClick={() => handleAutofill('new', newBook.title)} disabled={autofilling} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 min-h-[44px] rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 text-xs font-bold border border-amber-200">
                       {autofilling ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Fill
                     </button>
                   </div>
@@ -629,25 +747,41 @@ function LibrarianDashboard({ token }: { token: string }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Author</label>
-                    <input value={newBook.author} onChange={e => setNewBook({...newBook, author: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                    <input value={newBook.author} onChange={e => setNewBook({...newBook, author: e.target.value})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-200" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Genre</label>
-                    <input value={newBook.genre} onChange={e => setNewBook({...newBook, genre: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                    <input value={newBook.genre} onChange={e => setNewBook({...newBook, genre: e.target.value})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-200" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Total Pages</label>
-                    <input type="number" value={newBook.total_pages || ''} onChange={e => setNewBook({...newBook, total_pages: Number(e.target.value)})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                    <input type="number" value={newBook.total_pages || ''} onChange={e => setNewBook({...newBook, total_pages: Number(e.target.value)})} className="w-full px-3 py-2 min-h-[44px] text-sm rounded-lg border border-slate-200" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Cover Image (Upload)</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'new')} disabled={uploadingImage} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                  {uploadingImage && !editingBook && <p className="text-xs text-indigo-500 mt-1 flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Uploading...</p>}
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Cover Image</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {/* File Browser Upload */}
+                    <div className="flex-1 relative">
+                       <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'new')} disabled={uploadingImage} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                       <div className="flex items-center justify-center gap-2 w-full bg-white text-slate-700 py-2.5 px-4 min-h-[44px] rounded-lg text-sm font-semibold border border-slate-200">
+                         <Plus size={16} /> File
+                       </div>
+                    </div>
+                    
+                    {/* Camera Specific Upload */}
+                    <div className="flex-1 relative">
+                       <input type="file" accept="image/*" capture="environment" onChange={(e) => handleImageUpload(e, 'new')} disabled={uploadingImage} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                       <div className="flex items-center justify-center gap-2 w-full bg-indigo-50 text-indigo-700 py-2.5 px-4 min-h-[44px] rounded-lg text-sm font-semibold border border-indigo-100">
+                         <Camera size={16} /> Photo
+                       </div>
+                    </div>
+                  </div>
+                  {uploadingImage && !editingBook && <p className="text-xs text-indigo-500 mt-2 flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Compressing...</p>}
                   {newBook.cover_image_url && (
-                    <div className="mt-2 border border-slate-200 rounded-lg p-1 w-fit bg-white">
+                    <div className="mt-3 border border-slate-200 rounded-lg p-1 w-fit bg-white shadow-sm">
                       <img src={`${API_BASE_URL}${newBook.cover_image_url}`} alt="Cover Preview" className="h-24 object-cover rounded" />
                     </div>
                   )}
@@ -656,26 +790,22 @@ function LibrarianDashboard({ token }: { token: string }) {
                   <label className="block text-xs font-medium text-slate-500 mb-1">Synopsis</label>
                   <textarea value={newBook.description} onChange={e => setNewBook({...newBook, description: e.target.value})} rows={3} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 resize-none" />
                 </div>
-                <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 rounded-xl transition-colors">Add to Database</button>
+                <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 min-h-[48px] rounded-xl transition-colors">Add to Database</button>
               </form>
             </div>
 
             {/* Inventory List */}
-            <div className="md:col-span-2 rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
+            <div className="lg:col-span-2 rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
                 <h3 className="text-lg font-bold flex items-center gap-2"><Library size={20} className="text-indigo-600"/> Library Inventory</h3>
-                <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="Search books..." className="pl-9 pr-4 py-2 text-sm rounded-full bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
-                </div>
               </div>
               
               <div className="overflow-x-auto bg-white flex-1">
-                <table className="w-full text-left border-collapse text-sm">
+                <table className="w-full text-left border-collapse text-sm min-w-[500px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       <th className="p-4 font-medium border-b border-slate-100">Cover</th>
-                      <th className="p-4 font-medium border-b border-slate-100">QR ID / Title</th>
+                      <th className="p-4 font-medium border-b border-slate-100">Book Details</th>
                       <th className="p-4 font-medium border-b border-slate-100">Status</th>
                       <th className="p-4 font-medium border-b border-slate-100 text-right">Actions</th>
                     </tr>
@@ -698,7 +828,7 @@ function LibrarianDashboard({ token }: { token: string }) {
                             )}
                           </td>
                           <td className="p-4">
-                            <p className="font-medium text-slate-800">{book.title || "Untitled"}</p>
+                            <p className="font-medium text-slate-800 line-clamp-1">{book.title || "Untitled"}</p>
                             <p className="font-mono text-xs text-slate-400 mt-0.5">{book.qr_code_id}</p>
                           </td>
                           <td className="p-4">
@@ -707,12 +837,20 @@ function LibrarianDashboard({ token }: { token: string }) {
                             </span>
                           </td>
                           <td className="p-4 text-right">
-                            <button 
-                              onClick={() => setEditingBook(book)}
-                              className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                            >
-                              Edit
-                            </button>
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={() => setEditingBook(book)}
+                                className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-lg text-xs font-bold transition-colors min-w-[44px]"
+                              >
+                                Edit
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteBook(book.id)}
+                                className="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-bold transition-colors min-w-[44px]"
+                              >
+                                <Trash2 size={16}/>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -736,10 +874,10 @@ function LibrarianDashboard({ token }: { token: string }) {
               <div className="flex gap-3 w-full sm:w-auto">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Quantity</label>
-                  <input type="number" min="1" max="100" value={qrCount} onChange={e => setQrCount(Number(e.target.value))} className="w-20 px-3 py-2 text-sm rounded-xl border border-slate-200 text-center" />
+                  <input type="number" min="1" max="100" value={qrCount} onChange={e => setQrCount(Number(e.target.value))} className="w-20 px-3 py-2 min-h-[44px] text-sm rounded-xl border border-slate-200 text-center" />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={generateQRBatch} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-medium hover:bg-slate-800 transition">
+                  <button onClick={generateQRBatch} className="bg-slate-900 text-white px-5 py-2 min-h-[44px] rounded-xl font-medium hover:bg-slate-800 transition">
                     Generate
                   </button>
                 </div>
@@ -759,7 +897,7 @@ function LibrarianDashboard({ token }: { token: string }) {
               <div>
                 <div className="flex justify-between items-center mb-4 print:hidden">
                   <h3 className="font-bold text-slate-800">Generated Batch ({qrBatch.length})</h3>
-                  <button onClick={() => window.print()} className="bg-indigo-600 text-white px-5 py-2 rounded-xl font-medium hover:bg-indigo-700 transition flex items-center shadow-sm">
+                  <button onClick={() => window.print()} className="bg-indigo-600 text-white px-5 py-2 min-h-[44px] rounded-xl font-medium hover:bg-indigo-700 transition flex items-center shadow-sm">
                     <Download className="w-4 h-4 mr-2" /> Print Stickers
                   </button>
                 </div>
@@ -835,7 +973,7 @@ function AIChatWidget() {
             <Library size={20} />
             <h3 className="font-bold">SmartLib AI</h3>
           </div>
-          <button onClick={() => setIsOpen(false)} className="text-indigo-200 hover:text-white transition-colors">
+          <button onClick={() => setIsOpen(false)} className="text-indigo-200 hover:text-white transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
             <X size={20} />
           </button>
         </div>
@@ -867,7 +1005,7 @@ function AIChatWidget() {
             value={input} 
             onChange={e => setInput(e.target.value)} 
             placeholder="Ask for recommendations..." 
-            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+            className="w-full px-4 py-3 min-h-[48px] bg-slate-50 border border-slate-200 rounded-full text-base focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
           />
         </form>
       </div>
