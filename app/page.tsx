@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer, Camera } from "lucide-react";
+import { BookOpen, Library, LogOut, MessageSquare, Plus, ScanLine, Search, User, X, Loader2, Download, Printer, Camera, Edit, Sparkles } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
@@ -296,9 +296,13 @@ function BorrowerDashboard({ token }: { token: string }) {
             ) : (
               borrowedBooks.map((bBook: any) => (
                 <div key={bBook.transaction_id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
-                  <div className="w-12 h-16 bg-indigo-100 rounded shadow-sm flex-shrink-0 flex items-center justify-center text-indigo-400">
-                    <BookOpen size={24} />
-                  </div>
+                  {bBook.book_cover_image_url ? (
+                    <img src={`${API_BASE_URL}${bBook.book_cover_image_url}`} alt="Cover" className="w-12 h-16 object-cover rounded shadow-sm flex-shrink-0 border border-slate-200" />
+                  ) : (
+                    <div className="w-12 h-16 bg-indigo-100 rounded shadow-sm flex-shrink-0 flex items-center justify-center text-indigo-400">
+                      <BookOpen size={24} />
+                    </div>
+                  )}
                   <div className="flex-1">
                     <h4 className="font-bold text-slate-800">{bBook.book_title || "Unknown Title"}</h4>
                     <p className="text-sm text-slate-500">{bBook.book_author || "Unknown Author"}</p>
@@ -330,10 +334,14 @@ function LibrarianDashboard({ token }: { token: string }) {
   const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // New Book Form State
-  const [newBook, setNewBook] = useState({ qr_code_id: "", title: "", author: "", genre: "", description: "" });
+  // Forms State
+  const [newBook, setNewBook] = useState({ qr_code_id: "", title: "", author: "", genre: "", description: "", cover_image_url: "", total_pages: 0 });
+  const [editingBook, setEditingBook] = useState<any>(null); // Holds the book currently being edited
+
   const [formMsg, setFormMsg] = useState({ text: "", type: "" });
   const [showScanner, setShowScanner] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
 
   // QR Generator State
   const [qrCount, setQrCount] = useState(12);
@@ -353,6 +361,34 @@ function LibrarianDashboard({ token }: { token: string }) {
 
   useEffect(() => { fetchBooks(); }, []);
 
+  // --- Actions ---
+
+  const handleAutofill = async (targetState: 'new' | 'edit', titleToSearch: string) => {
+    if (!titleToSearch) return;
+    setAutofilling(true);
+    setFormMsg({ text: "", type: "" });
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/books/autofill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ title: titleToSearch }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Autofill failed");
+      
+      if (targetState === 'new') {
+        setNewBook(prev => ({ ...prev, ...data }));
+      } else {
+        setEditingBook((prev: any) => ({ ...prev, ...data }));
+      }
+      setFormMsg({ text: "AI Autofill Complete!", type: "success" });
+    } catch (err: any) {
+      setFormMsg({ text: err.message, type: "error" });
+    } finally {
+      setAutofilling(false);
+    }
+  };
+
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormMsg({ text: "", type: "" });
@@ -365,15 +401,65 @@ function LibrarianDashboard({ token }: { token: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to add book");
       setFormMsg({ text: "Book added successfully!", type: "success" });
-      setNewBook({ qr_code_id: "", title: "", author: "", genre: "", description: "" });
-      fetchBooks(); // Refresh list
+      setNewBook({ qr_code_id: "", title: "", author: "", genre: "", description: "", cover_image_url: "", total_pages: 0 });
+      fetchBooks();
     } catch (err: any) {
       setFormMsg({ text: err.message, type: "error" });
     }
   };
 
+  const handleUpdateBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormMsg({ text: "", type: "" });
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/books/${editingBook.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify(editingBook),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to update book");
+      
+      setFormMsg({ text: "Book updated successfully!", type: "success" });
+      setTimeout(() => {
+        setEditingBook(null);
+        setFormMsg({ text: "", type: "" });
+      }, 1500);
+      fetchBooks();
+    } catch (err: any) {
+      setFormMsg({ text: err.message, type: "error" });
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetState: 'new' | 'edit') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploadingImage(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/upload-cover`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+      
+      if (targetState === 'new') setNewBook({...newBook, cover_image_url: data.cover_image_url});
+      else setEditingBook({...editingBook, cover_image_url: data.cover_image_url});
+      
+      setFormMsg({ text: "Image uploaded securely!", type: "success" });
+    } catch (err: any) {
+      setFormMsg({ text: err.message, type: "error" });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const generateQRBatch = () => {
-    // Generates an array of secure, random 6-character strings like "QR-A1B2C3"
     const newBatch = Array.from({ length: qrCount }, () => {
       const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
       return `QR-${randomString}`;
@@ -413,8 +499,87 @@ function LibrarianDashboard({ token }: { token: string }) {
         
         {/* --- INVENTORY TAB --- */}
         {tab === 'inventory' && (
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Add Book Form */}
+          <div className="grid md:grid-cols-3 gap-6 relative">
+            
+            {/* Book Edit Modal Overlay */}
+            {editingBook && (
+              <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex justify-between items-center">
+                    <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Edit size={18}/> Edit Book: {editingBook.title}</h3>
+                    <button onClick={() => { setEditingBook(null); setFormMsg({text:"", type:""}); }} className="text-indigo-400 hover:text-indigo-900"><X size={20}/></button>
+                  </div>
+                  
+                  <div className="p-6 overflow-y-auto flex-1">
+                    <form onSubmit={handleUpdateBook} className="space-y-4">
+                      {formMsg.text && (
+                        <div className={`p-3 text-sm rounded-lg border ${formMsg.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                          {formMsg.text}
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">QR Code ID (Reassign)</label>
+                        <input required value={editingBook.qr_code_id} onChange={e => setEditingBook({...editingBook, qr_code_id: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 font-mono" />
+                        <p className="text-[10px] text-slate-500 mt-1">Change this to link the book to a newly printed QR sticker.</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Title</label>
+                        <div className="flex gap-2">
+                          <input value={editingBook.title} onChange={e => setEditingBook({...editingBook, title: e.target.value})} className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                          <button type="button" onClick={() => handleAutofill('edit', editingBook.title)} disabled={autofilling} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 text-sm font-medium border border-amber-200">
+                            {autofilling ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} AI Fill
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">Author</label>
+                          <input value={editingBook.author || ''} onChange={e => setEditingBook({...editingBook, author: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">Genre</label>
+                          <input value={editingBook.genre || ''} onChange={e => setEditingBook({...editingBook, genre: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                         <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">Total Pages</label>
+                          <input type="number" value={editingBook.total_pages || ''} onChange={e => setEditingBook({...editingBook, total_pages: Number(e.target.value)})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Cover Image (Upload New)</label>
+                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'edit')} disabled={uploadingImage} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                        {uploadingImage && <p className="text-xs text-indigo-500 mt-1 flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Uploading safely to VPS...</p>}
+                        {editingBook.cover_image_url && (
+                          <div className="mt-2 border border-slate-200 rounded-lg p-1 w-fit bg-white">
+                            <img src={`${API_BASE_URL}${editingBook.cover_image_url}`} alt="Cover Preview" className="h-24 object-cover rounded" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Synopsis</label>
+                        <textarea value={editingBook.description || ''} onChange={e => setEditingBook({...editingBook, description: e.target.value})} rows={3} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 resize-none" />
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-100 flex gap-2">
+                         <button type="button" onClick={() => { setEditingBook(null); setFormMsg({text:"", type:""}); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-xl transition-colors">Cancel</button>
+                         <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-xl transition-colors shadow-sm">Save Changes</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
+            {/* Add Book Form (Sidebar) */}
             <div className="md:col-span-1 bg-slate-50 p-6 rounded-2xl border border-slate-100 h-fit relative">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus size={20} className="text-indigo-600"/> Scan-to-Add Book</h3>
               
@@ -438,7 +603,7 @@ function LibrarianDashboard({ token }: { token: string }) {
               )}
 
               <form onSubmit={handleAddBook} className="space-y-4">
-                {formMsg.text && (
+                {formMsg.text && !editingBook && (
                   <div className={`p-2 text-sm rounded-lg ${formMsg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                     {formMsg.text}
                   </div>
@@ -454,7 +619,12 @@ function LibrarianDashboard({ token }: { token: string }) {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
-                  <input value={newBook.title} onChange={e => setNewBook({...newBook, title: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                  <div className="flex gap-2">
+                    <input value={newBook.title} onChange={e => setNewBook({...newBook, title: e.target.value})} className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                    <button type="button" onClick={() => handleAutofill('new', newBook.title)} disabled={autofilling} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 text-xs font-bold border border-amber-200">
+                      {autofilling ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Fill
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -466,6 +636,22 @@ function LibrarianDashboard({ token }: { token: string }) {
                     <input value={newBook.genre} onChange={e => setNewBook({...newBook, genre: e.target.value})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Total Pages</label>
+                    <input type="number" value={newBook.total_pages || ''} onChange={e => setNewBook({...newBook, total_pages: Number(e.target.value)})} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Cover Image (Upload)</label>
+                  <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'new')} disabled={uploadingImage} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                  {uploadingImage && !editingBook && <p className="text-xs text-indigo-500 mt-1 flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Uploading...</p>}
+                  {newBook.cover_image_url && (
+                    <div className="mt-2 border border-slate-200 rounded-lg p-1 w-fit bg-white">
+                      <img src={`${API_BASE_URL}${newBook.cover_image_url}`} alt="Cover Preview" className="h-24 object-cover rounded" />
+                    </div>
+                  )}
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Synopsis</label>
                   <textarea value={newBook.description} onChange={e => setNewBook({...newBook, description: e.target.value})} rows={3} className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 resize-none" />
@@ -475,7 +661,7 @@ function LibrarianDashboard({ token }: { token: string }) {
             </div>
 
             {/* Inventory List */}
-            <div className="md:col-span-2 rounded-2xl border border-slate-100 overflow-hidden">
+            <div className="md:col-span-2 rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
                 <h3 className="text-lg font-bold flex items-center gap-2"><Library size={20} className="text-indigo-600"/> Library Inventory</h3>
                 <div className="relative">
@@ -484,14 +670,14 @@ function LibrarianDashboard({ token }: { token: string }) {
                 </div>
               </div>
               
-              <div className="overflow-x-auto bg-white">
+              <div className="overflow-x-auto bg-white flex-1">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
-                      <th className="p-4 font-medium border-b border-slate-100">QR ID</th>
-                      <th className="p-4 font-medium border-b border-slate-100">Title</th>
-                      <th className="p-4 font-medium border-b border-slate-100">Author</th>
+                      <th className="p-4 font-medium border-b border-slate-100">Cover</th>
+                      <th className="p-4 font-medium border-b border-slate-100">QR ID / Title</th>
                       <th className="p-4 font-medium border-b border-slate-100">Status</th>
+                      <th className="p-4 font-medium border-b border-slate-100 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -502,13 +688,31 @@ function LibrarianDashboard({ token }: { token: string }) {
                     ) : (
                       books.map((book) => (
                         <tr key={book.id} className="hover:bg-slate-50/50 border-b border-slate-100 last:border-0 transition-colors">
-                          <td className="p-4 font-mono text-xs text-slate-500">{book.qr_code_id}</td>
-                          <td className="p-4 font-medium text-slate-800">{book.title || "Untitled"}</td>
-                          <td className="p-4 text-slate-600">{book.author || "Unknown"}</td>
+                          <td className="p-4 w-16">
+                            {book.cover_image_url ? (
+                              <img src={`${API_BASE_URL}${book.cover_image_url}`} alt="cover" className="w-10 h-14 object-cover rounded shadow-sm border border-slate-200" />
+                            ) : (
+                              <div className="w-10 h-14 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-300">
+                                <BookOpen size={16} />
+                              </div>
+                            )}
+                          </td>
                           <td className="p-4">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${book.is_available ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            <p className="font-medium text-slate-800">{book.title || "Untitled"}</p>
+                            <p className="font-mono text-xs text-slate-400 mt-0.5">{book.qr_code_id}</p>
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold ${book.is_available ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                               {book.is_available ? 'Available' : 'Checked Out'}
                             </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <button 
+                              onClick={() => setEditingBook(book)}
+                              className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Edit
+                            </button>
                           </td>
                         </tr>
                       ))
