@@ -263,6 +263,11 @@ function BorrowerDashboard({ token }: { token: string }) {
   const [borrowedBooks, setBorrowedBooks] = useState<any[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
 
+  // New state for viewing book details and updating progress
+  const [selectedBook, setSelectedBook] = useState<any>(null);
+  const [progressBook, setProgressBook] = useState<any>(null);
+  const [newPage, setNewPage] = useState("");
+
   const fetchBorrowedBooks = async () => {
     setLoadingBooks(true);
     try {
@@ -304,8 +309,93 @@ function BorrowerDashboard({ token }: { token: string }) {
     }
   };
 
+  const handleUpdateProgress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!progressBook || !newPage) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/transactions/${progressBook.transaction_id}/progress`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ current_page: parseInt(newPage) }),
+      });
+      if (!response.ok) throw new Error("Failed to update progress");
+      setMessage({ text: "Reading progress updated!", type: "success" });
+      setProgressBook(null);
+      setNewPage("");
+      fetchBorrowedBooks();
+    } catch (err: any) {
+      setMessage({ text: err.message, type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 relative">
+      
+      {/* Progress Update Modal */}
+      {progressBook && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-sm overflow-hidden">
+            <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex justify-between items-center">
+              <h3 className="font-bold text-indigo-900">Update Progress</h3>
+              <button onClick={() => setProgressBook(null)} className="text-indigo-400 hover:text-indigo-900"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleUpdateProgress} className="p-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                What page are you on? (Total: {progressBook.book_total_pages})
+              </label>
+              <input 
+                type="number" 
+                min="0" 
+                max={progressBook.book_total_pages || undefined}
+                value={newPage} 
+                onChange={e => setNewPage(e.target.value)} 
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-base mb-4" 
+                placeholder="e.g. 150" 
+                required
+              />
+              <button disabled={loading} type="submit" className="w-full min-h-[48px] bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors">
+                {loading ? "Updating..." : "Save Progress"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Book Details Modal */}
+      {selectedBook && !progressBook && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex justify-between items-center">
+              <h3 className="font-bold text-indigo-900">Book Details</h3>
+              <button onClick={() => setSelectedBook(null)} className="text-indigo-400 hover:text-indigo-900"><X size={20}/></button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 text-center">
+              {selectedBook.book_cover_image_url ? (
+                <img src={`${API_BASE_URL}${selectedBook.book_cover_image_url}`} alt="Cover" className="w-32 h-48 object-cover rounded-lg shadow-md mx-auto mb-4 border border-slate-200" />
+              ) : (
+                <div className="w-32 h-48 bg-indigo-100 rounded-lg shadow-md mx-auto mb-4 flex items-center justify-center text-indigo-400">
+                  <BookOpen size={48} />
+                </div>
+              )}
+              <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedBook.book_title}</h2>
+              <p className="text-slate-600 font-medium mb-1">by {selectedBook.book_author}</p>
+              <span className="inline-block bg-slate-100 text-slate-500 text-xs font-bold px-2.5 py-1 rounded-full mb-4">{selectedBook.book_genre || 'Genre Unknown'}</span>
+              
+              <div className="text-left bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 text-sm text-slate-700 leading-relaxed">
+                {selectedBook.book_description || 'No synopsis available for this book.'}
+              </div>
+              
+              <button onClick={() => { setProgressBook(selectedBook); }} className="w-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium py-3 rounded-xl transition-colors border border-indigo-100">
+                Update Reading Progress
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Your Dashboard</h1>
       
       <div className="grid md:grid-cols-2 gap-6">
@@ -373,40 +463,48 @@ function BorrowerDashboard({ token }: { token: string }) {
               <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400">
                 <p className="text-sm">Ready for a new adventure?</p>
                 <p className="text-xs mt-1">Ask the AI for a recommendation, then scan a book to borrow it!</p>
-              </div>
-            ) : (
-              borrowedBooks.map((bBook: any) => (
-                <div key={bBook.transaction_id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
-                  {bBook.book_cover_image_url ? (
-                    <img src={`${API_BASE_URL}${bBook.book_cover_image_url}`} alt="Cover" className="w-12 h-16 object-cover rounded shadow-sm flex-shrink-0 border border-slate-200" />
-                  ) : (
-                    <div className="w-12 h-16 bg-indigo-100 rounded shadow-sm flex-shrink-0 flex items-center justify-center text-indigo-400">
-                      <BookOpen size={24} />
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <h4 className="font-bold text-slate-800">{bBook.book_title || "Unknown Title"}</h4>
-                    <p className="text-sm text-slate-500">{bBook.book_author || "Unknown Author"}</p>
-                    <div className="mt-3 bg-slate-200 h-2 w-full rounded-full overflow-hidden">
-                      <div 
-                        className="bg-indigo-500 h-full rounded-full" 
-                        style={{ width: `${bBook.book_total_pages > 0 ? (bBook.current_page / bBook.book_total_pages) * 100 : 0}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Page {bBook.current_page} of {bBook.book_total_pages || '?'} • 
-                      <span className={bBook.days_left <= 3 ? "text-red-500 font-bold ml-1" : "ml-1"}>
-                        {bBook.days_left} days left
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
           </div>
-        </div>
+        ) : (
+          borrowedBooks.map((bBook: any) => (
+            <div key={bBook.transaction_id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4 hover:border-indigo-200 transition-colors cursor-pointer group" onClick={() => setSelectedBook(bBook)}>
+              {bBook.book_cover_image_url ? (
+                <img src={`${API_BASE_URL}${bBook.book_cover_image_url}`} alt="Cover" className="w-12 h-16 object-cover rounded shadow-sm flex-shrink-0 border border-slate-200" />
+              ) : (
+                <div className="w-12 h-16 bg-indigo-100 rounded shadow-sm flex-shrink-0 flex items-center justify-center text-indigo-400">
+                  <BookOpen size={24} />
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <h4 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1">{bBook.book_title || "Unknown Title"}</h4>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setProgressBook(bBook); }} 
+                    className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors whitespace-nowrap ml-2"
+                  >
+                    Update Page
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500 line-clamp-1">{bBook.book_author || "Unknown Author"}</p>
+                <div className="mt-3 bg-slate-200 h-2 w-full rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-500 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${bBook.book_total_pages > 0 ? (bBook.current_page / bBook.book_total_pages) * 100 : 0}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-slate-400 mt-1 flex justify-between">
+                  <span>Page {bBook.current_page} of {bBook.book_total_pages || '?'}</span>
+                  <span className={bBook.days_left <= 3 ? "text-red-500 font-bold ml-1" : "ml-1"}>
+                    {bBook.days_left} days left
+                  </span>
+                </p>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
+  </div>
+</div>
   );
 }
 
@@ -928,6 +1026,14 @@ function AIChatWidget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Simple Markdown formatter for bold text, italics, and line breaks
+  const formatMarkdown = (text: string) => {
+    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    formatted = formatted.replace(/\n/g, '<br/>');
+    return { __html: formatted };
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -982,8 +1088,11 @@ function AIChatWidget() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm'}`}>
-                {msg.text}
+              <div 
+                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm'}`}
+                dangerouslySetInnerHTML={msg.role === 'ai' ? formatMarkdown(msg.text) : undefined}
+              >
+                {msg.role === 'user' ? msg.text : undefined}
               </div>
             </div>
           ))}
