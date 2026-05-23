@@ -1026,11 +1026,25 @@ function AIChatWidget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Simple Markdown formatter for bold text, italics, and line breaks
+  // Upgraded Markdown formatter for bold text, line breaks, and bulleted lists
   const formatMarkdown = (text: string) => {
-    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    formatted = formatted.replace(/\n/g, '<br/>');
+    let formatted = text
+      // 1. Format Bold text and give it a nice dark color
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-900">$1</strong>')
+      // 2. Format Italics (single asterisks)
+      .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+      // 3. Format Bullet Points (lines starting with * or -)
+      .replace(/^[\*\-]\s+(.*)$/gm, '<li class="ml-5 list-disc">$1</li>')
+      // 4. Format Line Breaks
+      .replace(/\n/g, '<br/>');
+
+    // 5. Wrap adjacent <li> tags in a proper <ul> list container
+    formatted = formatted.replace(/(<li.*?<\/li>(?:<br\/>)*)+/g, (match) => {
+      // Remove rogue <br/> tags between list items for a cleaner look
+      const cleanList = match.replace(/<br\/>/g, '');
+      return `<ul class="my-2 space-y-1">${cleanList}</ul>`;
+    });
+
     return { __html: formatted };
   };
 
